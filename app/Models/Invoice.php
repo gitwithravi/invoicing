@@ -16,6 +16,8 @@ class Invoice extends Model
         'amount_paid',
         'amount_due',
         'status',
+        'payment_details',
+        'terms',
     ];
 
     public function biller()
@@ -31,5 +33,10 @@ class Invoice extends Model
     public function items()
     {
         return $this->hasMany(InvoiceItem::class);
+    }
+
+    public function extraCharges()
+    {
+        return $this->hasMany(InvoiceExtraCharge::class);
     }
 }

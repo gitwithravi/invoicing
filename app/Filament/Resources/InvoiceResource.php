@@ -1,18 +1,19 @@
 <?php
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\InvoiceResource\Pages;
-use App\Models\Biller;
-use App\Models\Customer;
-use App\Models\Invoice;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Tables;
+use App\Models\Biller;
+use App\Models\Invoice;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Resources\Resource;
-use Filament\Tables;
+use App\Models\Customer;
+use Filament\Forms\Form;
 use Filament\Tables\Table;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Resources\Resource;
 use Illuminate\Support\HtmlString;
+use App\Filament\Resources\InvoiceResource\Pages;
 
 class InvoiceResource extends Resource
 {
@@ -146,13 +147,13 @@ class InvoiceResource extends Resource
                                     ->numeric()
                                     ->live()
                                     ->afterStateUpdated(function (Get $get, Set $set) {
-                                        $quantity = floatval($get('quantity') ?? 0);
+                                        $quantity  = floatval($get('quantity') ?? 0);
                                         $unitPrice = floatval($get('unit_price') ?? 0);
                                         $set('total_price', $quantity * $unitPrice);
 
                                         // Recalculate tax amounts
-                                        $totalPrice = $quantity * $unitPrice;
-                                        $taxRate = floatval($get('tax_rate') ?? 0);
+                                        $totalPrice     = $quantity * $unitPrice;
+                                        $taxRate        = floatval($get('tax_rate') ?? 0);
                                         $totalTaxAmount = $totalPrice * ($taxRate / 100);
                                         $set('total_tax_amount', $totalTaxAmount);
                                         $set('amount_with_tax', $totalPrice + $totalTaxAmount);
@@ -163,13 +164,13 @@ class InvoiceResource extends Resource
                                     ->numeric()
                                     ->live()
                                     ->afterStateUpdated(function (Get $get, Set $set) {
-                                        $quantity = floatval($get('quantity') ?? 0);
+                                        $quantity  = floatval($get('quantity') ?? 0);
                                         $unitPrice = floatval($get('unit_price') ?? 0);
                                         $set('total_price', $quantity * $unitPrice);
 
                                         // Recalculate tax amounts
-                                        $totalPrice = $quantity * $unitPrice;
-                                        $taxRate = floatval($get('tax_rate') ?? 0);
+                                        $totalPrice     = $quantity * $unitPrice;
+                                        $taxRate        = floatval($get('tax_rate') ?? 0);
                                         $totalTaxAmount = $totalPrice * ($taxRate / 100);
                                         $set('total_tax_amount', $totalTaxAmount);
                                         $set('amount_with_tax', $totalPrice + $totalTaxAmount);
@@ -184,16 +185,16 @@ class InvoiceResource extends Resource
                                 Forms\Components\TextInput::make('tax_name')
                                     ->required()
                                     ->live()
-                                    ->disabled(fn (Get $get): bool => !$get('total_price'))
+                                    ->disabled(fn(Get $get): bool => ! $get('total_price'))
                                     ->extraAttributes(['class' => 'fi-input-sm']),
                                 Forms\Components\TextInput::make('tax_rate')
                                     ->required()
                                     ->numeric()
                                     ->live()
-                                    ->disabled(fn (Get $get): bool => !$get('total_price'))
+                                    ->disabled(fn(Get $get): bool => ! $get('total_price'))
                                     ->afterStateUpdated(function (Get $get, Set $set) {
-                                        $totalPrice = floatval($get('total_price') ?? 0);
-                                        $taxRate = floatval($get('tax_rate') ?? 0);
+                                        $totalPrice     = floatval($get('total_price') ?? 0);
+                                        $taxRate        = floatval($get('tax_rate') ?? 0);
                                         $totalTaxAmount = $totalPrice * ($taxRate / 100);
                                         $set('total_tax_amount', $totalTaxAmount);
                                         $set('amount_with_tax', $totalPrice + $totalTaxAmount);
@@ -213,19 +214,45 @@ class InvoiceResource extends Resource
                                     ->extraAttributes(['class' => 'fi-input-sm']),
                             ])
                             ->columns(8),
+
+                    ]),
+                Forms\Components\Section::make('Extra Charges')
+                    ->schema([
+                        Forms\Components\Repeater::make('extra_charges')
+                            ->relationship('extraCharges')
+                            ->schema([
+                                Forms\Components\TextInput::make('name')
+                                    ->required()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('amount')
+                                    ->required()
+                                    ->numeric()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\Select::make('type')
+                                    ->required()
+                                    ->options([
+                                        'discount'     => 'Discount',
+                                        'extra_charge' => 'Extra Charge',
+                                    ])
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                            ])
+                            ->columns(3),
+                    ]),
+                Forms\Components\Section::make('Total')
+                    ->schema([
                         Forms\Components\Placeholder::make('Tax Details')
                             ->content(function (Get $get, Set $set) {
-                                $items = $get('items') ?? [];
+                                $items        = $get('items') ?? [];
                                 $taxBreakdown = [];
-                                $totalAmount = 0;
+                                $totalAmount  = 0;
 
                                 // Group items by tax_name and calculate totals
                                 foreach ($items as $item) {
-                                    $taxName = $item['tax_name'] ?? 'No Tax';
+                                    $taxName   = $item['tax_name'] ?? 'No Tax';
                                     $taxAmount = floatval($item['total_tax_amount'] ?? 0);
                                     $totalAmount += floatval($item['amount_with_tax'] ?? 0);
 
-                                    if (!isset($taxBreakdown[$taxName])) {
+                                    if (! isset($taxBreakdown[$taxName])) {
                                         $taxBreakdown[$taxName] = 0;
                                     }
                                     $taxBreakdown[$taxName] += $taxAmount;
@@ -238,9 +265,9 @@ class InvoiceResource extends Resource
                                 foreach ($taxBreakdown as $taxName => $amount) {
                                     $output .= sprintf(
                                         '<div class="flex justify-between">
-                                            <span>%s:</span>
-                                            <span>%.2f</span>
-                                        </div>',
+                                        <span>%s:</span>
+                                        <span>%.2f</span>
+                                    </div>',
                                         htmlspecialchars($taxName),
                                         $amount
                                     );
@@ -248,18 +275,95 @@ class InvoiceResource extends Resource
 
                                 $output .= sprintf(
                                     '<div class="pt-2 border-t mt-2">
-                                        <div class="flex justify-between font-medium">
-                                            <span>Total Amount (Inc. Tax):</span>
-                                            <span>%.2f</span>
-                                        </div>
-                                    </div>',
+                                    <div class="flex justify-between font-medium">
+                                        <span>Subtotal (Inc. Tax):</span>
+                                        <span>%.2f</span>
+                                    </div>
+                                </div>',
                                     $totalAmount
                                 );
 
                                 $output .= '</div>';
 
+                                return new HtmlString($output);
+                            })
+                            ->live()
+                            ->extraAttributes(['class' => 'fi-input-sm']),
+                        Forms\Components\Placeholder::make('Extra Charges')
+                            ->content(function (Get $get, Set $set) {
+                                $extraCharges = $get('extra_charges') ?? [];
+                                $totalDiscount = 0;
+                                $totalExtraCharge = 0;
+
+                                // Build the HTML output
+                                $output = '<div class="space-y-2">';
+                                $output .= '<div class="font-medium">Extra Charges & Discounts:</div>';
+
+                                foreach ($extraCharges as $charge) {
+                                    $amount = floatval($charge['amount'] ?? 0);
+                                    $type = $charge['type'] ?? 'extra_charge';
+                                    $name = $charge['name'] ?? '';
+
+                                    if ($type === 'discount') {
+                                        $totalDiscount += $amount;
+                                        $amount = -$amount; // Show discount as negative
+                                    } else {
+                                        $totalExtraCharge += $amount;
+                                    }
+
+                                    $output .= sprintf(
+                                        '<div class="flex justify-between">
+                                            <span>%s:</span>
+                                            <span class="%s">%.2f</span>
+                                        </div>',
+                                        htmlspecialchars($name),
+                                        $type === 'discount' ? 'text-danger-500' : '',
+                                        $amount
+                                    );
+                                }
+
+                                $output .= '</div>';
+
+                                return new HtmlString($output);
+                            })
+                            ->live()
+                            ->extraAttributes(['class' => 'fi-input-sm']),
+                        Forms\Components\Placeholder::make('Final Total')
+                            ->content(function (Get $get, Set $set) {
+                                // Calculate subtotal from items
+                                $items = $get('items') ?? [];
+                                $subtotal = 0;
+                                foreach ($items as $item) {
+                                    $subtotal += floatval($item['amount_with_tax'] ?? 0);
+                                }
+
+                                // Calculate extra charges and discounts
+                                $extraCharges = $get('extra_charges') ?? [];
+                                $totalAdjustments = 0;
+                                foreach ($extraCharges as $charge) {
+                                    $amount = floatval($charge['amount'] ?? 0);
+                                    if ($charge['type'] === 'discount') {
+                                        $totalAdjustments -= $amount;
+                                    } else {
+                                        $totalAdjustments += $amount;
+                                    }
+                                }
+
+                                // Calculate final total
+                                $finalTotal = $subtotal + $totalAdjustments;
+
+                                $output = sprintf(
+                                    '<div class="pt-2 border-t mt-2">
+                                        <div class="flex justify-between font-medium text-lg">
+                                            <span>Final Total:</span>
+                                            <span>%.2f</span>
+                                        </div>
+                                    </div>',
+                                    $finalTotal
+                                );
+
                                 // Set the total_amount field
-                                $set('total_amount', $totalAmount);
+                                $set('total_amount', $finalTotal);
 
                                 return new HtmlString($output);
                             })
@@ -271,7 +375,13 @@ class InvoiceResource extends Resource
                             ->numeric()
                             ->dehydrated()
                             ->extraAttributes(['class' => 'fi-input-sm']),
-
+                    ]),
+                Forms\Components\Section::make('Payment Details')
+                    ->schema([
+                        Forms\Components\RichEditor::make('payment_details')
+                            ->extraAttributes(['class' => 'fi-input-sm']),
+                        Forms\Components\RichEditor::make('terms')
+                            ->extraAttributes(['class' => 'fi-input-sm']),
                     ]),
             ]);
 
@@ -281,17 +391,50 @@ class InvoiceResource extends Resource
     {
         return $table
             ->columns([
-                //
+                Tables\Columns\TextColumn::make('invoice_number'),
+                Tables\Columns\TextColumn::make('customer.name'),
+                Tables\Columns\TextColumn::make('total_amount'),
+                Tables\Columns\TextColumn::make('status'),
+                Tables\Columns\TextColumn::make('created_at')->dateTime(),
             ])
             ->filters([
                 //
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('generate_pdf')
+                ->label('Download PDF')
+                ->icon('heroicon-o-document-arrow-down')
+                ->action(function (\App\Models\Invoice $record) {
+                    try {
+                        $pdf = Pdf::loadView('invoices.pdf', ['invoice' => $record])
+                            ->setPaper('a4', 'portrait')
+                            ->setOptions([
+                                'isPhpEnabled' => true,
+                                'isRemoteEnabled' => true,
+                                'margin_bottom' => 20,
+                                'defaultFont' => 'DejaVu Sans',
+                                'chroot' => storage_path('app/public'),
+                                'enable_remote' => true,
+                                'log_output_file' => storage_path('logs/dompdf.html')
+                            ]);
+
+                        return response()->streamDownload(
+                            fn () => print($pdf->output()),
+                            "Invoice-{$record->id}.pdf"
+                        );
+                    } catch (\Exception $e) {
+                        \Log::error('PDF Generation Error: ' . $e->getMessage());
+                        throw $e;
+                    }
+                })
+                ->color('primary'),
+
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+
                 ]),
             ]);
     }
