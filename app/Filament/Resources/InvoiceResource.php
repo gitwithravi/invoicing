@@ -10,6 +10,7 @@ use Filament\Forms\Set;
 use App\Models\Customer;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
+use App\Models\CustomerGroup;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Resources\Resource;
 use Illuminate\Support\HtmlString;
@@ -101,6 +102,24 @@ class InvoiceResource extends Resource
                             ->columnSpan(1),
                         Forms\Components\Section::make('Billed To')
                             ->schema([
+                                Forms\Components\Select::make('invoice_type')
+                                    ->label('')
+                                    ->options([
+                                        'customer' => 'Customer',
+                                        'customer_group' => 'Customer Group',
+                                    ])
+                                    ->required()
+                                    ->live()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\Select::make('customer_group_id')
+                                    ->label('')
+                                    ->options(CustomerGroup::all()->pluck('name', 'id'))
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->live()
+                                    ->extraAttributes(['class' => 'fi-input-sm'])
+                                    ->visible(fn(Get $get): bool => $get('invoice_type') === 'customer_group'),
                                 Forms\Components\Select::make('customer_id')
                                     ->label('')
                                     ->relationship('customer', 'name')
@@ -108,12 +127,17 @@ class InvoiceResource extends Resource
                                     ->preload()
                                     ->required()
                                     ->live()
-                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                    ->extraAttributes(['class' => 'fi-input-sm'])
+                                    ->visible(fn(Get $get): bool => $get('invoice_type') === 'customer'),
                                 Forms\Components\Section::make()
                                     ->schema([
                                         Forms\Components\Placeholder::make('')
                                             ->content(function (Get $get) {
-                                                $customer = $get('customer_id');
+                                                if ($get('invoice_type') === 'customer_group') {
+                                                    return 'Invoice for Customer Group';
+                                                } else {
+                                                    $customer = $get('customer_id');
+                                                }
                                                 $customer = Customer::find($customer);
                                                 if (! $customer) {
                                                     return '';
@@ -136,6 +160,7 @@ class InvoiceResource extends Resource
                     ]),
                 Forms\Components\Section::make('Items')
                     ->schema([
+                        // Repeater for single customer invoices (with relationship)
                         Forms\Components\Repeater::make('items')
                             ->relationship('items')
                             ->schema([
@@ -213,11 +238,93 @@ class InvoiceResource extends Resource
                                     ->dehydrated()
                                     ->extraAttributes(['class' => 'fi-input-sm']),
                             ])
-                            ->columns(8),
+                            ->columns(8)
+                            ->visible(fn(Get $get): bool => $get('invoice_type') !== 'customer_group'),
+
+                        // Repeater for customer group invoices (without relationship)
+                        Forms\Components\Repeater::make('items')
+                            ->schema([
+                                Forms\Components\TextInput::make('item_name')
+                                    ->required()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('quantity')
+                                    ->required()
+                                    ->numeric()
+                                    ->live()
+                                    ->afterStateUpdated(function (Get $get, Set $set) {
+                                        $quantity  = floatval($get('quantity') ?? 0);
+                                        $unitPrice = floatval($get('unit_price') ?? 0);
+                                        $set('total_price', $quantity * $unitPrice);
+
+                                        // Recalculate tax amounts
+                                        $totalPrice     = $quantity * $unitPrice;
+                                        $taxRate        = floatval($get('tax_rate') ?? 0);
+                                        $totalTaxAmount = $totalPrice * ($taxRate / 100);
+                                        $set('total_tax_amount', $totalTaxAmount);
+                                        $set('amount_with_tax', $totalPrice + $totalTaxAmount);
+                                    })
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('unit_price')
+                                    ->required()
+                                    ->numeric()
+                                    ->live()
+                                    ->afterStateUpdated(function (Get $get, Set $set) {
+                                        $quantity  = floatval($get('quantity') ?? 0);
+                                        $unitPrice = floatval($get('unit_price') ?? 0);
+                                        $set('total_price', $quantity * $unitPrice);
+
+                                        // Recalculate tax amounts
+                                        $totalPrice     = $quantity * $unitPrice;
+                                        $taxRate        = floatval($get('tax_rate') ?? 0);
+                                        $totalTaxAmount = $totalPrice * ($taxRate / 100);
+                                        $set('total_tax_amount', $totalTaxAmount);
+                                        $set('amount_with_tax', $totalPrice + $totalTaxAmount);
+                                    })
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('total_price')
+                                    ->required()
+                                    ->disabled()
+                                    ->numeric()
+                                    ->dehydrated()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('tax_name')
+                                    ->required()
+                                    ->live()
+                                    ->disabled(fn(Get $get): bool => ! $get('total_price'))
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('tax_rate')
+                                    ->required()
+                                    ->numeric()
+                                    ->live()
+                                    ->disabled(fn(Get $get): bool => ! $get('total_price'))
+                                    ->afterStateUpdated(function (Get $get, Set $set) {
+                                        $totalPrice     = floatval($get('total_price') ?? 0);
+                                        $taxRate        = floatval($get('tax_rate') ?? 0);
+                                        $totalTaxAmount = $totalPrice * ($taxRate / 100);
+                                        $set('total_tax_amount', $totalTaxAmount);
+                                        $set('amount_with_tax', $totalPrice + $totalTaxAmount);
+                                    })
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('total_tax_amount')
+                                    ->required()
+                                    ->disabled()
+                                    ->numeric()
+                                    ->dehydrated()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('amount_with_tax')
+                                    ->required()
+                                    ->disabled()
+                                    ->numeric()
+                                    ->dehydrated()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                            ])
+                            ->columns(8)
+                            ->visible(fn(Get $get): bool => $get('invoice_type') === 'customer_group'),
 
                     ]),
                 Forms\Components\Section::make('Extra Charges')
                     ->schema([
+                        // Repeater for single customer invoices (with relationship)
                         Forms\Components\Repeater::make('extra_charges')
                             ->relationship('extraCharges')
                             ->schema([
@@ -236,7 +343,29 @@ class InvoiceResource extends Resource
                                     ])
                                     ->extraAttributes(['class' => 'fi-input-sm']),
                             ])
-                            ->columns(3),
+                            ->columns(3)
+                            ->visible(fn(Get $get): bool => $get('invoice_type') !== 'customer_group'),
+
+                        // Repeater for customer group invoices (without relationship)
+                        Forms\Components\Repeater::make('extra_charges')
+                            ->schema([
+                                Forms\Components\TextInput::make('name')
+                                    ->required()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\TextInput::make('amount')
+                                    ->required()
+                                    ->numeric()
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                                Forms\Components\Select::make('type')
+                                    ->required()
+                                    ->options([
+                                        'discount'     => 'Discount',
+                                        'extra_charge' => 'Extra Charge',
+                                    ])
+                                    ->extraAttributes(['class' => 'fi-input-sm']),
+                            ])
+                            ->columns(3)
+                            ->visible(fn(Get $get): bool => $get('invoice_type') === 'customer_group'),
                     ]),
                 Forms\Components\Section::make('Total')
                     ->schema([
