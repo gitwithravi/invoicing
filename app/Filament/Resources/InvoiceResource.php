@@ -1,20 +1,20 @@
 <?php
 namespace App\Filament\Resources;
 
-use Filament\Forms;
-use Filament\Tables;
+use App\Filament\Resources\InvoiceResource\Pages;
 use App\Models\Biller;
+use App\Models\Customer;
+use App\Models\CustomerGroup;
 use App\Models\Invoice;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Forms;
+use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use App\Models\Customer;
-use Filament\Forms\Form;
-use Filament\Tables\Table;
-use App\Models\CustomerGroup;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
 use Illuminate\Support\HtmlString;
-use App\Filament\Resources\InvoiceResource\Pages;
 
 class InvoiceResource extends Resource
 {
@@ -105,7 +105,7 @@ class InvoiceResource extends Resource
                                 Forms\Components\Select::make('invoice_type')
                                     ->label('')
                                     ->options([
-                                        'customer' => 'Customer',
+                                        'customer'       => 'Customer',
                                         'customer_group' => 'Customer Group',
                                     ])
                                     ->required()
@@ -420,8 +420,8 @@ class InvoiceResource extends Resource
                             ->extraAttributes(['class' => 'fi-input-sm']),
                         Forms\Components\Placeholder::make('Extra Charges')
                             ->content(function (Get $get, Set $set) {
-                                $extraCharges = $get('extra_charges') ?? [];
-                                $totalDiscount = 0;
+                                $extraCharges     = $get('extra_charges') ?? [];
+                                $totalDiscount    = 0;
                                 $totalExtraCharge = 0;
 
                                 // Build the HTML output
@@ -430,8 +430,8 @@ class InvoiceResource extends Resource
 
                                 foreach ($extraCharges as $charge) {
                                     $amount = floatval($charge['amount'] ?? 0);
-                                    $type = $charge['type'] ?? 'extra_charge';
-                                    $name = $charge['name'] ?? '';
+                                    $type   = $charge['type'] ?? 'extra_charge';
+                                    $name   = $charge['name'] ?? '';
 
                                     if ($type === 'discount') {
                                         $totalDiscount += $amount;
@@ -460,14 +460,14 @@ class InvoiceResource extends Resource
                         Forms\Components\Placeholder::make('Final Total')
                             ->content(function (Get $get, Set $set) {
                                 // Calculate subtotal from items
-                                $items = $get('items') ?? [];
+                                $items    = $get('items') ?? [];
                                 $subtotal = 0;
                                 foreach ($items as $item) {
                                     $subtotal += floatval($item['amount_with_tax'] ?? 0);
                                 }
 
                                 // Calculate extra charges and discounts
-                                $extraCharges = $get('extra_charges') ?? [];
+                                $extraCharges     = $get('extra_charges') ?? [];
                                 $totalAdjustments = 0;
                                 foreach ($extraCharges as $charge) {
                                     $amount = floatval($charge['amount'] ?? 0);
@@ -505,13 +505,43 @@ class InvoiceResource extends Resource
                             ->dehydrated()
                             ->extraAttributes(['class' => 'fi-input-sm']),
                     ]),
-                Forms\Components\Section::make('Payment Details')
-                    ->schema([
-                        Forms\Components\RichEditor::make('payment_details')
-                            ->extraAttributes(['class' => 'fi-input-sm']),
-                        Forms\Components\RichEditor::make('terms')
-                            ->extraAttributes(['class' => 'fi-input-sm']),
-                    ]),
+                    Forms\Components\Section::make('Payments')
+                        ->schema([
+                            Forms\Components\Placeholder::make('')
+                                ->content(function (Get $get, Set $set) {
+                                    $amount_paid = $get('amount_paid') ?? 0;
+                                    $amount_due = $get('amount_due') ?? 0;
+                                    $total_amount = $get('total_amount') ?? 0;
+                                    $output = sprintf(
+                                        '<div class="pt-2 border-t mt-2">
+                                        <div class="flex justify-between font-medium text-lg">
+                                            <span>Amount Paid:</span>
+                                            <span>%.2f</span>
+                                        </div>
+                                    </div>',
+                                        $amount_paid
+                                    );
+                                    return new HtmlString($output);
+                                })
+                                ->live()
+                                ->extraAttributes(['class' => 'fi-input-sm']),
+                            Forms\Components\Placeholder::make('')
+                                ->content(function (Get $get, Set $set) {
+                                    $amount_due = $get('amount_due') ?? 0;
+                                    $total_amount = $get('total_amount') ?? 0;
+                                    $output = sprintf(
+                                        '<div class="pt-2 border-t mt-2">
+                                        <div class="flex justify-between font-medium text-lg">
+                                            <span>Amount Due:</span>
+                                            <span>%.2f</span>
+                                        </div>
+                                    </div>',
+                                        $amount_due
+                                    );
+                                    return new HtmlString($output);
+                                })
+                        ])
+
             ]);
 
     }
@@ -522,42 +552,54 @@ class InvoiceResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('invoice_number'),
                 Tables\Columns\TextColumn::make('customer.name'),
-                Tables\Columns\TextColumn::make('total_amount'),
+                Tables\Columns\TextColumn::make('invoice_date')->date('d-m-Y'),
+                Tables\Columns\TextColumn::make('due_date')->date('d-m-Y')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('total_amount')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('amount_paid')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('amount_due')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('status'),
-                Tables\Columns\TextColumn::make('created_at')->dateTime(),
+                Tables\Columns\TextColumn::make('created_at')->dateTime()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\Action::make('generate_pdf')
-                ->label('Download PDF')
-                ->icon('heroicon-o-document-arrow-down')
-                ->action(function (\App\Models\Invoice $record) {
-                    try {
-                        $pdf = Pdf::loadView('invoices.pdf', ['invoice' => $record])
-                            ->setPaper('a4', 'portrait')
-                            ->setOptions([
-                                'isPhpEnabled' => true,
-                                'isRemoteEnabled' => true,
-                                'margin_bottom' => 20,
-                                'defaultFont' => 'DejaVu Sans',
-                                'chroot' => storage_path('app/public'),
-                                'enable_remote' => true,
-                                'log_output_file' => storage_path('logs/dompdf.html')
-                            ]);
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
 
-                        return response()->streamDownload(
-                            fn () => print($pdf->output()),
-                            "Invoice-{$record->id}.pdf"
-                        );
-                    } catch (\Exception $e) {
-                        \Log::error('PDF Generation Error: ' . $e->getMessage());
-                        throw $e;
-                    }
-                })
-                ->color('primary'),
+                    Tables\Actions\Action::make('generate_pdf')
+                        ->label('Download Invoice')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->action(function (\App\Models\Invoice $record) {
+                            try {
+                                $pdf = Pdf::loadView('invoices.pdf', ['invoice' => $record])
+                                    ->setPaper('a4', 'portrait')
+                                    ->setOptions([
+                                        'isPhpEnabled'    => true,
+                                        'isRemoteEnabled' => true,
+                                        'margin_bottom'   => 20,
+                                        'defaultFont'     => 'DejaVu Sans',
+                                        'chroot'          => storage_path('app/public'),
+                                        'enable_remote'   => true,
+                                        'log_output_file' => storage_path('logs/dompdf.html'),
+                                    ]);
+
+                                return response()->streamDownload(
+                                    fn() => print($pdf->output()),
+                                    "Invoice-{$record->id}.pdf"
+                                );
+                            } catch (\Exception $e) {
+                                \Log::error('PDF Generation Error: ' . $e->getMessage());
+                                throw $e;
+                            }
+                        })
+                        ->color('primary'),
+                ]),
 
             ])
             ->bulkActions([
@@ -571,7 +613,7 @@ class InvoiceResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            InvoiceResource\RelationManagers\PaymentsRelationManager::class,
         ];
     }
 

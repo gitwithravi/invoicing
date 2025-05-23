@@ -1,10 +1,10 @@
 <?php
-
 namespace App\Filament\Resources\CustomerResource\Pages;
 
-use App\Filament\Resources\CustomerResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use App\Filament\Imports\CustomerImporter;
+use App\Filament\Resources\CustomerResource;
 
 class ListCustomers extends ListRecords
 {
@@ -14,7 +14,10 @@ class ListCustomers extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-            ->slideOver(),
+                ->slideOver(),
+            Actions\ImportAction::make()
+                ->importer(CustomerImporter::class)
+                ->color('primary'),
         ];
     }
 }
