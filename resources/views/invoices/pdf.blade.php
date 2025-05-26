@@ -83,9 +83,52 @@
             max-width: 100%;
             height: auto;
         }
+
+        /* Watermark styles */
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 120px;
+            font-weight: bold;
+            color: rgba(200, 200, 200, 0.3);
+            z-index: -1;
+            white-space: nowrap;
+            pointer-events: none;
+            text-transform: uppercase;
+            letter-spacing: 10px;
+        }
+
+        /* Different colors for different statuses */
+        .watermark.paid {
+            color: rgba(34, 197, 94, 0.2);
+        }
+
+        .watermark.pending {
+            color: rgba(251, 191, 36, 0.3);
+        }
+
+        .watermark.overdue {
+            color: rgba(239, 68, 68, 0.3);
+        }
+
+        .watermark.draft {
+            color: rgba(156, 163, 175, 0.3);
+        }
+
+        .watermark.cancelled {
+            color: rgba(239, 68, 68, 0.4);
+        }
     </style>
 </head>
 <body>
+
+    <!-- Watermark -->
+    <div class="watermark {{ strtolower($invoice->status) }}">
+        {{ $invoice->status }}
+    </div>
+
     <!-- Header Section -->
     <table class="no-border">
         <tr>

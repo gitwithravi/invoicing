@@ -1,26 +1,39 @@
 <?php
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\InvoiceResource\Pages;
-use App\Models\Biller;
-use App\Models\Customer;
-use App\Models\CustomerGroup;
-use App\Models\Invoice;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Tables;
+use App\Models\Biller;
+use App\Models\Invoice;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Resources\Resource;
-use Filament\Tables;
+use App\Models\Customer;
+use Filament\Forms\Form;
 use Filament\Tables\Table;
+use App\Models\CustomerGroup;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Resources\Resource;
 use Illuminate\Support\HtmlString;
+
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Resources\InvoiceResource\Pages;
 
 class InvoiceResource extends Resource
 {
     protected static ?string $model = Invoice::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+
+    public static function getEloquentQuery(): Builder
+    {
+        if(Auth::user()->user_type == 'user') {
+            $customer = Customer::where('user_id', auth()->user()->id)->first();
+            return parent::getEloquentQuery()->where('customer_id', $customer->id);
+        }
+        return parent::getEloquentQuery();
+
+    }
 
     public static function form(Form $form): Form
     {
