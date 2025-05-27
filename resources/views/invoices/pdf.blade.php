@@ -177,7 +177,6 @@
             <td class="right">
                 <strong>Invoice #:</strong> IN-{{ $invoice->id }}<br>
                 <strong>Invoice Date:</strong> {{ $invoice->created_at->format('d/m/Y') }}<br>
-                <strong>P.O.#:</strong><br>
                 <strong>Due Date:</strong> {{ $invoice->due_date }}
             </td>
         </tr>
@@ -202,7 +201,11 @@
                     <td>{{ $item->quantity }}</td>
                     <td>{{ $item->unit_price }}</td>
                     <td>{{ $item->total_price }}</td>
-                    <td>{{ $item->tax_name }} @ {{ $item->tax_rate }}%</td>
+                    @if($item->tax_rate > 0)
+                        <td>{{ $item->tax_name }} @ {{ $item->tax_rate }}%</td>
+                    @else
+                        <td></td>
+                    @endif
                     <td>{{ $item->amount_with_tax }}</td>
                 </tr>
             @endforeach
