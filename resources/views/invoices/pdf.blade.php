@@ -204,7 +204,7 @@
                     @if($item->tax_rate > 0)
                         <td>{{ $item->tax_name }} @ {{ $item->tax_rate }}%</td>
                     @else
-                        <td></td>
+                        <td>-</td>
                     @endif
                     <td>{{ $item->amount_with_tax }}</td>
                 </tr>
@@ -227,6 +227,7 @@
 
             // Calculate tax breakdown
             foreach($invoice->items as $item) {
+
                 $taxName = $item->tax_name ?? 'No Tax';
                 $taxAmount = (float)$item->total_tax_amount;
                 $subtotal += (float)$item->amount_with_tax;
@@ -239,10 +240,12 @@
         @endphp
 
         @foreach($taxBreakdown as $taxName => $amount)
+        @if($amount > 0)
             <tr>
                 <td class="right">{{ $taxName }}:</td>
                 <td class="right">₹{{ number_format($amount, 2) }}</td>
             </tr>
+            @endif
         @endforeach
 
         <tr class="border-top">
