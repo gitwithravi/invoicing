@@ -64,6 +64,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->plugins([
                 FilamentShieldPlugin::make(),
+                \ChrisReedIO\Socialment\SocialmentPlugin::make(),
             ])
             ->authMiddleware([
                 Authenticate::class,
