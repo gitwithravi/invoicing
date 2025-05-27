@@ -43,6 +43,10 @@ class PaymentsRelationManager extends RelationManager
                 Tables\Actions\Action::make('add_payment')
                     ->label('Add Payment')
                     ->icon('heroicon-o-check-circle')
+                    ->visible(function() {
+                        $invoice = $this->getOwnerRecord();
+                        return $invoice->status == 'unpaid' || $invoice->status == 'partially_paid';
+                    })
                     ->form([
                         Forms\Components\TextInput::make('amount_paid')
                             ->required()

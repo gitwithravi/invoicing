@@ -21,7 +21,7 @@ return new class extends Migration
             $table->decimal('total_amount', 10, 2)->nullable();
             $table->decimal('amount_paid', 10, 2)->nullable();
             $table->decimal('amount_due', 10, 2)->nullable();
-            $table->string('status')->default('created');
+            $table->string('status')->default('draft');
             $table->timestamps();
         });
     }
