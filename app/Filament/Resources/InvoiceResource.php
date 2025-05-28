@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 use Filament\Forms;
 use Filament\Tables;
 use App\Models\Biller;
+use App\Models\Ledger;
 use App\Models\Invoice;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
@@ -13,8 +14,8 @@ use Filament\Tables\Table;
 use App\Models\CustomerGroup;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Resources\Resource;
-use Illuminate\Support\HtmlString;
 
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\InvoiceResource\Pages;
@@ -45,6 +46,13 @@ class InvoiceResource extends Resource
                             ->schema([
                                 Forms\Components\Grid::make('1')
                                     ->schema([
+                                        Forms\Components\Select::make('ledger_id')
+                                            ->label('Ledger')
+                                            ->inlineLabel()
+                                            ->relationship('ledger', 'name')
+                                            ->searchable()
+                                            ->preload()
+                                            ->extraAttributes(['class' => 'fi-input-sm']),
                                         Forms\Components\TextInput::make('invoice_number')
                                             ->required()
                                             ->inlineLabel()
@@ -563,8 +571,13 @@ class InvoiceResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('invoice_number'),
-                Tables\Columns\TextColumn::make('customer.name'),
+                Tables\Columns\TextColumn::make('invoice_number')
+                    ->searchable()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('customer.name')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('ledger.name')
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('invoice_date')->date('d-m-Y'),
                 Tables\Columns\TextColumn::make('due_date')->date('d-m-Y')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -579,7 +592,15 @@ class InvoiceResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('customer_id')
+                    ->options(Customer::all()->pluck('name', 'id'))
+                    ->searchable(),
+                Tables\Filters\SelectFilter::make('status')
+                    ->options(Invoice::pluck('status', 'status'))
+                    ->searchable(),
+                Tables\Filters\SelectFilter::make('ledger_id')
+                    ->options(Ledger::all()->pluck('name', 'id'))
+                    ->searchable(),
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([

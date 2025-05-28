@@ -6,6 +6,7 @@ use Filament\Forms;
 use Filament\Tables;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Log;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -65,8 +66,15 @@ class PaymentsRelationManager extends RelationManager
                     ])
                     ->action(function (array $data) {
                         $record = $this->getOwnerRecord();
-                        if($data['amount_paid'] > $record->amount_due)
+                        Log::info("Amount Due: ");
+                        if($record->amount_due == NULL)
                         {
+                            $record->amount_due = $record->total_amount;
+                        }
+                        if($data['amount_paid'] > ($record->amount_due ))
+                        {
+                            Log::info("Amount Paid: " . $data['amount_paid']);
+                            Log::info("Amount Due: " . $record->amount_due);
                             Notification::make()
                             ->title('Amount Paid is greater than Amount Due')
                             ->danger()

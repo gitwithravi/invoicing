@@ -39,6 +39,7 @@ class Invoice extends Model
         'status',
         'payment_details',
         'terms',
+        'ledger_id',
     ];
 
     public function biller()
@@ -64,5 +65,10 @@ class Invoice extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function ledger()
+    {
+        return $this->belongsTo(Ledger::class);
     }
 }
