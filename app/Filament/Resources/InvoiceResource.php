@@ -606,7 +606,7 @@ class InvoiceResource extends Resource
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make(),
 
-                    Tables\Actions\Action::make('generate_pdf')
+                    Tables\Actions\Action::make('generateInvoicePdf')
                         ->label('Download Invoice')
                         ->icon('heroicon-o-document-arrow-down')
                         ->action(function (\App\Models\Invoice $record) {
@@ -633,6 +633,34 @@ class InvoiceResource extends Resource
                             }
                         })
                         ->color('primary'),
+                        Tables\Actions\Action::make('generateReceiptPdf')
+                        ->label('Download Receipt')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->action(function (\App\Models\Invoice $record) {
+                            try {
+                                $pdf = Pdf::loadView('receipts.pdf', ['invoice' => $record])
+                                    ->setPaper('a4', 'portrait')
+                                    ->setOptions([
+                                        'isPhpEnabled'    => true,
+                                        'isRemoteEnabled' => true,
+                                        'margin_bottom'   => 20,
+                                        'defaultFont'     => 'DejaVu Sans',
+                                        'chroot'          => storage_path('app/public'),
+                                        'enable_remote'   => true,
+                                        'log_output_file' => storage_path('logs/dompdf.html'),
+                                    ]);
+
+                                return response()->streamDownload(
+                                    fn() => print($pdf->output()),
+                                    "Invoice-{$record->id}.pdf"
+                                );
+                            } catch (\Exception $e) {
+                                \Log::error('PDF Generation Error: ' . $e->getMessage());
+                                throw $e;
+                            }
+                        })
+                        ->color('primary')
+                        ->visible(fn($record): bool => $record->status === 'paid'),
                 ]),
 
             ])
