@@ -14,6 +14,10 @@ use Filament\Tables\Table;
 use App\Models\CustomerGroup;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Resources\Resource;
+use Filament\Notifications\Notification;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\PaymentsReportExport;
+use App\Exports\SingleInvoicePaymentsExport;
 
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Auth;
@@ -602,6 +606,35 @@ class InvoiceResource extends Resource
                     ->options(Ledger::all()->pluck('name', 'id'))
                     ->searchable(),
             ])
+            ->headerActions([
+                Tables\Actions\Action::make('export_all_payments')
+                    ->label('Export All Payments (Excel)')
+                    ->icon('heroicon-o-document-chart-bar')
+                    ->color('warning')
+                    ->action(function () {
+                        try {
+                            // Get all invoices with their relationships
+                            $invoices = Invoice::with(['customer', 'biller', 'payments'])->get();
+
+                            Notification::make()
+                                ->title('Excel Export Started')
+                                ->body('Generating comprehensive Excel payments report for ' . $invoices->count() . ' invoice(s)...')
+                                ->info()
+                                ->send();
+
+                            return self::exportPaymentsReport($invoices);
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->title('Excel Export Failed')
+                                ->body('There was an error generating the Excel payments report: ' . $e->getMessage())
+                                ->danger()
+                                ->send();
+
+                            \Log::error('All Payments Excel Export Error: ' . $e->getMessage());
+                            return null;
+                        }
+                    }),
+            ])
             ->actions([
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make(),
@@ -661,15 +694,90 @@ class InvoiceResource extends Resource
                         })
                         ->color('primary')
                         ->visible(fn($record): bool => $record->status === 'paid'),
+                    Tables\Actions\Action::make('export_invoice_payments')
+                        ->label('Export Invoice Payments (Excel)')
+                        ->icon('heroicon-o-table-cells')
+                        ->color('info')
+                        ->action(function (\App\Models\Invoice $record) {
+                            try {
+                                Notification::make()
+                                    ->title('Excel Export Started')
+                                    ->body('Generating Excel payments report for invoice ' . $record->invoice_number)
+                                    ->info()
+                                    ->send();
+
+                                return self::exportSingleInvoicePayments($record);
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title('Excel Export Failed')
+                                    ->body('There was an error generating the Excel invoice payments report: ' . $e->getMessage())
+                                    ->danger()
+                                    ->send();
+
+                                \Log::error('Single Invoice Payments Excel Export Error: ' . $e->getMessage());
+                                return null;
+                            }
+                        }),
                 ]),
 
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\Action::make('export_payments_report')
+                        ->label('Export Payments Report (Excel)')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->color('success')
+                        ->action(function ($records) {
+                            try {
+                                Notification::make()
+                                    ->title('Excel Export Started')
+                                    ->body('Generating Excel payments report for ' . $records->count() . ' invoice(s)...')
+                                    ->info()
+                                    ->send();
 
+                                return self::exportPaymentsReport($records);
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title('Excel Export Failed')
+                                    ->body('There was an error generating the Excel payments report: ' . $e->getMessage())
+                                    ->danger()
+                                    ->send();
+
+                                \Log::error('Payments Report Excel Export Error: ' . $e->getMessage());
+                                return null;
+                            }
+                        })
+                        ->deselectRecordsAfterCompletion(),
                 ]),
             ]);
+    }
+
+    protected static function exportPaymentsReport($records)
+    {
+        // Ensure we have a collection
+        if (!$records instanceof \Illuminate\Support\Collection) {
+            $records = collect($records);
+        }
+
+        // Generate filename with current date (already safe, but adding extra safety)
+        $timestamp = now()->format('Y-m-d_H-i-s');
+        $filename = 'payments_report_' . $timestamp . '.xlsx';
+
+        // Use the beautiful Excel export
+        return Excel::download(new PaymentsReportExport($records), $filename);
+    }
+
+    protected static function exportSingleInvoicePayments($invoice)
+    {
+        // Sanitize invoice number for filename (remove/replace invalid characters)
+        $sanitizedInvoiceNumber = preg_replace('/[\/\\\\:*?"<>|]/', '_', $invoice->invoice_number);
+
+        // Generate filename
+        $filename = 'invoice_' . $sanitizedInvoiceNumber . '_payments_' . now()->format('Y-m-d_H-i-s') . '.xlsx';
+
+        // Use the beautiful Excel export
+        return Excel::download(new SingleInvoicePaymentsExport($invoice), $filename);
     }
 
     public static function getRelations(): array
